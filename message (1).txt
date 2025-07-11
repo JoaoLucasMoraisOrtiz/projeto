@@ -1,0 +1,392 @@
+Excelente\! Com base no novo diagrama e na documentação do Spring para upload de arquivos, vamos implementar a funcionalidade para que um `Resident` (morador) possa enviar um comprovante de pagamento para uma `Charge` (cobrança) específica.
+
+A lógica será a seguinte:
+
+1.  O sistema terá uma página para cada cobrança, onde o usuário poderá fazer o upload do arquivo.
+2.  Ao enviar o arquivo, o sistema o salvará em uma pasta no servidor.
+3.  O caminho para esse arquivo salvo será registrado em uma nova entidade `Payment`, que está associada à `Charge` original.
+4.  O status da `Charge` poderá ser atualizado para "Aguardando Confirmação" ou algo similar.
+
+Vamos seguir os passos da documentação oficial, adaptando-os ao nosso contexto.
+
+### 1\. Dependências do Projeto
+
+Certifique-se de que seu `pom.xml` (se usar Maven) possui as dependências para Web, Thymeleaf (para a interface de upload) e, opcionalmente, JPA e um banco de dados.
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
+```
+
+### 2\. Entidades JPA (Modelos)
+
+Vamos modelar as classes `Charge` e `Payment`. A classe `Payment` terá um campo extra para armazenar o nome/caminho do arquivo do comprovante. A classe `Charge` terá seu status atualizado.
+
+```java
+// Arquivo: com/example/condominium/model/Charge.java
+package com.example.condominium.model;
+
+import jakarta.persistence.*;
+import java.time.LocalDate;
+
+@Entity
+public class Charge {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private double value;
+    private LocalDate dueDate;
+    private String status; // Ex: PENDING, PAID, AWAITING_CONFIRMATION
+
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "payment_id", referencedColumnName = "id")
+    private Payment payment;
+
+    // Construtores, Getters e Setters
+    public Long getId() { return id; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public void setPayment(Payment payment) { this.payment = payment; }
+    // ... outros getters/setters
+}
+
+// Arquivo: com/example/condominium/model/Payment.java
+package com.example.condominium.model;
+
+import jakarta.persistence.*;
+import java.time.LocalDate;
+
+@Entity
+public class Payment {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private LocalDate paymentDate;
+    private double amountPaid;
+    
+    // Novo campo para o comprovante
+    private String paymentProofPath;
+
+    // Construtores, Getters e Setters
+    public void setPaymentDate(LocalDate paymentDate) { this.paymentDate = paymentDate; }
+    public void setAmountPaid(double amountPaid) { this.amountPaid = amountPaid; }
+    public void setPaymentProofPath(String paymentProofPath) { this.paymentProofPath = paymentProofPath; }
+    // ... outros getters/setters
+}
+```
+
+### 3\. Criando o Serviço de Armazenamento (`StorageService`)
+
+Esta é a parte central da lógica de upload. Criaremos um serviço responsável por salvar, carregar e gerenciar os arquivos no sistema de arquivos do servidor.
+
+Primeiro, uma classe para configurar o diretório de upload no `application.properties`.
+
+```java
+// Arquivo: com/example/condominium/storage/StorageProperties.java
+package com.example.condominium.storage;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties("storage")
+public class StorageProperties {
+    private String location = "upload-dir"; // Diretório padrão
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+}
+```
+
+Adicione a propriedade em `src/main/resources/application.properties`:
+
+```properties
+# Define o diretório onde os comprovantes serão salvos
+storage.location=payment-proofs
+```
+
+Agora, o serviço de armazenamento em si, que implementa a lógica para lidar com os arquivos.
+
+```java
+// Arquivo: com/example/condominium/storage/StorageService.java
+package com.example.condominium.storage;
+
+import org.springframework.core.io.Resource;
+import org.springframework.web.multipart.MultipartFile;
+import java.nio.file.Path;
+
+public interface StorageService {
+    void init();
+    String store(MultipartFile file);
+    Path load(String filename);
+    Resource loadAsResource(String filename);
+}
+
+// Arquivo: com/example/condominium/storage/FileSystemStorageService.java
+// (Esta é uma implementação completa. Você pode copiar e colar.)
+package com.example.condominium.storage;
+
+// ... importações necessárias (Path, Files, IOException, etc.)
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.UrlResource;
+import org.springframework.util.StringUtils;
+
+@Service
+public class FileSystemStorageService implements StorageService {
+    private final Path rootLocation;
+
+    @Autowired
+    public FileSystemStorageService(StorageProperties properties) {
+        this.rootLocation = Paths.get(properties.getLocation());
+    }
+
+    @Override
+    public void init() {
+        try {
+            Files.createDirectories(rootLocation);
+        } catch (IOException e) {
+            throw new RuntimeException("Could not initialize storage", e);
+        }
+    }
+
+    @Override
+    public String store(MultipartFile file) {
+        String filename = StringUtils.cleanPath(file.getOriginalFilename());
+        try {
+            if (file.isEmpty()) {
+                throw new RuntimeException("Failed to store empty file " + filename);
+            }
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, this.rootLocation.resolve(filename), StandardCopyOption.REPLACE_EXISTING);
+                return filename;
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to store file " + filename, e);
+        }
+    }
+    
+    // ... Implementação dos outros métodos (load, loadAsResource, etc.)
+    @Override
+    public Path load(String filename) {
+        return rootLocation.resolve(filename);
+    }
+
+    @Override
+    public Resource loadAsResource(String filename) {
+        try {
+            Path file = load(filename);
+            Resource resource = new UrlResource(file.toUri());
+            if (resource.exists() || resource.isReadable()) {
+                return resource;
+            } else {
+                throw new RuntimeException("Could not read file: " + filename);
+            }
+        } catch (MalformedURLException e) {
+            throw new RuntimeException("Could not read file: " + filename, e);
+        }
+    }
+}
+```
+
+### 4\. O Controller de Upload
+
+Este controller irá expor os endpoints HTTP para o usuário visualizar o formulário e enviar o arquivo.
+
+```java
+// Arquivo: com/example/condominium/controller/PaymentUploadController.java
+package com.example.condominium.controller;
+
+import com.example.condominium.model.Charge;
+import com.example.condominium.model.Payment;
+import com.example.condominium.repository.ChargeRepository;
+import com.example.condominium.storage.StorageService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.time.LocalDate;
+
+@Controller
+public class PaymentUploadController {
+
+    private final StorageService storageService;
+    private final ChargeRepository chargeRepository; // Supondo que você criou o Repository
+
+    @Autowired
+    public PaymentUploadController(StorageService storageService, ChargeRepository chargeRepository) {
+        this.storageService = storageService;
+        this.chargeRepository = chargeRepository;
+    }
+
+    // Endpoint para mostrar a página de upload para uma cobrança específica
+    @GetMapping("/charges/{id}/upload")
+    public String showUploadForm(@PathVariable("id") Long id, Model model) {
+        // Busca a cobrança no banco de dados para mostrar detalhes na página
+        Charge charge = chargeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid charge Id:" + id));
+        model.addAttribute("charge", charge);
+        return "uploadForm"; // Nome do arquivo HTML (template)
+    }
+
+    // Endpoint para processar o upload do arquivo
+    @PostMapping("/charges/{id}/upload")
+    public String handleFileUpload(@PathVariable("id") Long id,
+                                   @RequestParam("file") MultipartFile file,
+                                   RedirectAttributes redirectAttributes) {
+
+        Charge charge = chargeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid charge Id:" + id));
+
+        // 1. Armazena o arquivo
+        String storedFilename = storageService.store(file);
+        
+        // 2. Cria a entidade Payment com os dados
+        Payment newPayment = new Payment();
+        newPayment.setPaymentDate(LocalDate.now());
+        newPayment.setAmountPaid(charge.getValue()); // Supondo pagamento integral
+        newPayment.setPaymentProofPath(storedFilename);
+
+        // 3. Associa o pagamento à cobrança e atualiza o status
+        charge.setPayment(newPayment);
+        charge.setStatus("AWAITING_CONFIRMATION");
+        chargeRepository.save(charge); // Salva as alterações
+
+        redirectAttributes.addFlashAttribute("message",
+                "Comprovante enviado com sucesso: " + file.getOriginalFilename());
+
+        return "redirect:/charges/" + id + "/upload";
+    }
+    
+    // Endpoint para permitir o download do comprovante
+    @GetMapping("/files/{filename:.+}")
+    @ResponseBody
+    public ResponseEntity<Resource> serveFile(@PathVariable String filename) {
+        Resource file = storageService.loadAsResource(filename);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + file.getFilename() + "\"").body(file);
+    }
+}
+```
+
+### 5\. A Interface HTML (Thymeleaf)
+
+Crie um arquivo HTML em `src/main/resources/templates/uploadForm.html`.
+
+```html
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Upload de Comprovante</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .message { padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; margin-bottom: 20px;}
+        .charge-details { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>Enviar Comprovante de Pagamento</h1>
+
+    <div th:if="${message}" class="message">
+        <p th:text="${message}"></p>
+    </div>
+    
+    <div class="charge-details" th:if="${charge}">
+        <h2>Cobrança #<span th:text="${charge.id}">123</span></h2>
+        <p>Valor: R$ <span th:text="${#numbers.formatDecimal(charge.value, 1, 'POINT', 2, 'COMMA')}">150,00</span></p>
+        <p>Data de Vencimento: <span th:text="${#temporals.format(charge.dueDate, 'dd/MM/yyyy')}">05/08/2025</span></p>
+        <p><strong>Status: <span th:text="${charge.status}">PENDING</span></strong></p>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" th:action="@{/charges/{id}/upload(id=${charge.id})}">
+        <p><input type="file" name="file" /></p>
+        <p><input type="submit" value="Enviar Comprovante" /></p>
+    </form>
+    
+    <div th:if="${charge.payment != null and charge.payment.paymentProofPath != null}">
+        <p>Comprovante enviado: 
+            <a th:href="@{/files/{filename}(filename=${charge.payment.paymentProofPath})}" th:text="${charge.payment.paymentProofPath}"></a>
+        </p>
+    </div>
+
+</body>
+</html>
+```
+
+### 6\. Inicialização e Execução
+
+Finalmente, na sua classe principal da aplicação, habilite as propriedades de configuração e crie um `Bean` para inicializar o serviço de armazenamento na inicialização.
+
+```java
+// Arquivo: com/example/condominium/CondominiumApplication.java
+package com.example.condominium;
+
+import com.example.condominium.storage.StorageProperties;
+import com.example.condominium.storage.StorageService;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+
+@SpringBootApplication
+@EnableConfigurationProperties(StorageProperties.class)
+public class CondominiumApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(CondominiumApplication.class, args);
+    }
+
+    @Bean
+    CommandLineRunner init(StorageService storageService) {
+        return (args) -> {
+            // Limpa o diretório em testes. Cuidado em produção.
+            // storageService.deleteAll(); 
+            storageService.init();
+        };
+    }
+}
+```
+
+Ao executar esta aplicação, você poderá acessar `http://localhost:8080/charges/{id}/upload` (substituindo `{id}` por um ID de cobrança válido) para ver o formulário e testar o upload do comprovante.

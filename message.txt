@@ -1,0 +1,230 @@
+Com certeza\! Utilizando o esquema de classes que você forneceu e a funcionalidade de agendamento de tarefas do Spring Boot, podemos criar um sistema para enviar lembretes de pagamento de faturas mensalmente.
+
+A ideia principal é criar um serviço que é executado em um intervalo de tempo pré-definido. Este serviço irá buscar todos os moradores (`Resident`) e enviar uma notificação para cada um deles.
+
+Aqui está um exemplo completo de como você poderia implementar isso em um projeto Spring Boot.
+
+### 1\. Habilitar o Agendamento de Tarefas
+
+Primeiro, você precisa habilitar o agendamento na sua aplicação Spring Boot. Faça isso adicionando a anotação `@EnableScheduling` à sua classe principal.
+
+```java
+// Arquivo: com/example/condominium/CondominiumApplication.java
+
+package com.example.condominium;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableScheduling // Habilita o agendamento de tarefas
+public class CondominiumApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(CondominiumApplication.class, args);
+    }
+}
+```
+
+### 2\. Modelos (Entidades)
+
+Vamos representar as classes `Resident` e `Contact` como entidades JPA. Para este exemplo, vamos focar no envio de um email, então a classe `Contact` é essencial.
+
+```java
+// Arquivo: com/example/condominium/model/Contact.java
+
+package com.example.condominium.model;
+
+import jakarta.persistence.Entity;
+// Outras importações de persistência
+
+@Entity
+public class Contact {
+    // ... outros atributos e getters/setters
+    private String email;
+
+    public String getEmail() {
+        return email;
+    }
+}
+
+// Arquivo: com/example/condominium/model/Person.java
+
+package com.example.condominium.model;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+// Outras importações de persistência
+
+@Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+public class Person {
+    // ... outros atributos
+    private String name;
+
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "contact_id", referencedColumnName = "id")
+    private Contact contact;
+
+    // Getters e Setters
+    public String getName() {
+        return name;
+    }
+
+    public Contact getContact() {
+        return contact;
+    }
+}
+
+
+// Arquivo: com/example/condominium/model/Resident.java
+
+package com.example.condominium.model;
+
+import jakarta.persistence.Entity;
+// Outras importações de persistência
+
+@Entity
+public class Resident extends Person {
+    // Atributos específicos de Resident, se houver
+}
+```
+
+### 3\. Repositório para buscar os Moradores
+
+Precisamos de um `Repository` para acessar os dados dos moradores no banco de dados.
+
+```java
+// Arquivo: com/example/condominium/repository/ResidentRepository.java
+
+package com.example.condominium.repository;
+
+import com.example.condominium.model.Resident;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ResidentRepository extends JpaRepository<Resident, Long> {
+}
+```
+
+### 4\. Serviço de Notificação
+
+É uma boa prática separar a lógica de envio de notificações em seu próprio serviço.
+
+```java
+// Arquivo: com/example/condominium/service/NotificationService.java
+
+package com.example.condominium.service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+@Service
+public class NotificationService {
+
+    private static final Logger logger = LoggerFactory.getLogger(NotificationService.class);
+
+    public void sendPaymentReminder(String email, String residentName) {
+        // Aqui você implementaria a lógica real de envio de e-mail
+        // (usando JavaMailSender, SendGrid, etc.)
+        
+        if (email != null && !email.isEmpty()) {
+            String message = String.format(
+                "Enviando lembrete de pagamento para %s no e-mail %s",
+                residentName,
+                email
+            );
+            logger.info(message);
+        } else {
+            String message = String.format(
+                "Morador %s não possui um e-mail cadastrado para notificação.",
+                residentName
+            );
+            logger.warn(message);
+        }
+    }
+}
+```
+
+### 5\. A Tarefa Agendada (Scheduled Task)
+
+Esta é a classe principal que fará o trabalho. Ela será executada automaticamente pelo Spring Boot de acordo com a expressão `cron` que definirmos.
+
+```java
+// Arquivo: com/example/condominium/tasks/BillingNotificationTask.java
+
+package com.example.condominium.tasks;
+
+import com.example.condominium.model.Resident;
+import com.example.condominium.repository.ResidentRepository;
+import com.example.condominium.service.NotificationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Component
+public class BillingNotificationTask {
+
+    private static final Logger logger = LoggerFactory.getLogger(BillingNotificationTask.class);
+
+    @Autowired
+    private ResidentRepository residentRepository;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    /**
+     * Tarefa agendada para enviar lembretes de pagamento.
+     * A expressão cron "0 0 10 5 * ?" significa:
+     * - 0 segundos
+     * - 0 minutos
+     * - 10 horas
+     * - no dia 5 de cada mês
+     * - em qualquer dia da semana
+     * Resumindo: A tarefa será executada todo dia 5 de cada mês, às 10:00 da manhã.
+     */
+    @Scheduled(cron = "0 0 10 5 * ?")
+    public void sendMonthlyPaymentReminders() {
+        logger.info("Iniciando tarefa de envio de lembretes de pagamento...");
+
+        List<Resident> residents = residentRepository.findAll();
+
+        if (residents.isEmpty()) {
+            logger.info("Nenhum morador encontrado para notificar.");
+            return;
+        }
+
+        for (Resident resident : residents) {
+            // Supondo que a fatura está pendente (em um sistema real, haveria uma verificação)
+            notificationService.sendPaymentReminder(
+                resident.getContact().getEmail(),
+                resident.getName()
+            );
+        }
+
+        logger.info("Tarefa de envio de lembretes finalizada. Notificações enviadas para {} moradores.", residents.size());
+    }
+}
+```
+
+### Como Funciona
+
+1.  **`@EnableScheduling`**: Ativa o framework de agendamento do Spring.
+2.  **`@Component`**: Torna a classe `BillingNotificationTask` um bean gerenciado pelo Spring, permitindo que ele procure por métodos `@Scheduled`.
+3.  **`@Scheduled(cron = "...")`**: Esta é a anotação principal. Ela instrui o Spring a executar o método `sendMonthlyPaymentReminders()` em um cronograma definido pela expressão `cron`.
+      * Você pode ajustar a expressão `cron` para atender às suas necessidades. Por exemplo, para rodar no primeiro dia do mês às 8h, você usaria `"0 0 8 1 * ?"`.
+4.  **Injeção de Dependência (`@Autowired`)**: O Spring injeta automaticamente as instâncias do `ResidentRepository` e `NotificationService` para que possamos usá-las dentro da nossa tarefa.
+5.  **Lógica da Tarefa**: O método busca todos os moradores, itera sobre eles e chama o `NotificationService` para enviar o lembrete para o e-mail encontrado nos dados de contato de cada morador.
+
+Com essa estrutura, sua aplicação Spring Boot verificará e enviará notificações de pagamento automaticamente todo mês, sem qualquer intervenção manual.
