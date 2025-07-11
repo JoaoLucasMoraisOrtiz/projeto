@@ -1,0 +1,43 @@
+version: '3.8'
+services:
+  msresident:
+    build: ./MSResident
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/msresident
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+
+  msfinancial:
+    build: ./MSFinancialManagement
+    ports:
+      - "8082:8082"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/msfinancial
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+
+  msproprietary:
+    build: ./MSProprietary
+    ports:
+      - "8083:8083"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/msproprietary
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: msresident
+    ports:
+      - "3306:3306"
+    command: --default-authentication-plugin=mysql_native_password
