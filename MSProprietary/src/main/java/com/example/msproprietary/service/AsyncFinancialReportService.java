@@ -1,16 +1,22 @@
 package com.example.msproprietary.service;
 
 import com.example.msproprietary.model.Proprietary;
+import com.example.msproprietary.repository.ProprietaryRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Service
 public class AsyncFinancialReportService {
 
     private final RestTemplate restTemplate = new RestTemplate();
+    
+    @Autowired
+    private ProprietaryRepository proprietaryRepository;
 
     @Async
     public CompletableFuture<String> generateFinancialReport(Proprietary proprietary) {
@@ -59,16 +65,32 @@ public class AsyncFinancialReportService {
         try {
             System.out.println("Iniciando envio em lote de notificações...");
             
-            // Simula operação demorada de envio de notificações
-            Thread.sleep(3000);
+            List<Proprietary> proprietaries = proprietaryRepository.findAll();
             
-            System.out.println("Notificações em lote enviadas com sucesso!");
+            for (Proprietary proprietary : proprietaries) {
+                // Simula envio de notificação
+                sendNotificationToProprietary(proprietary);
+                
+                // Pequena pausa entre envios
+                Thread.sleep(100);
+            }
+            
+            System.out.println("Notificações em lote enviadas com sucesso! Total: " + proprietaries.size());
             
             return CompletableFuture.completedFuture(null);
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            System.err.println("Erro no envio de notificações em lote: " + e.getMessage());
+            return CompletableFuture.completedFuture(null);
         }
+    }
+    
+    private void sendNotificationToProprietary(Proprietary proprietary) {
+        // Implementar lógica de envio de notificação
+        // Pode ser email, SMS, push notification, etc.
+        System.out.println("Enviando notificação para: " + proprietary.getName() + " (" + proprietary.getEmail() + ")");
     }
 }

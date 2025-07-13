@@ -3,7 +3,7 @@ package com.example.mspr    @Test
         mockMvc.perform(get("/health/info"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.service").value("Microserviço de Proprietários"))
-                .andExpected(jsonPath("$.version").value("1.0.0"))
+                .andExpect(jsonPath("$.version").value("1.0.0"))
                 .andExpect(jsonPath("$.description").value("Gerencia informações de proprietários de condomínios"))
                 .andExpect(jsonPath("$.port").value(8083));
     }y.controller;
