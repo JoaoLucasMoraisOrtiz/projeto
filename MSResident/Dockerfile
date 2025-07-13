@@ -1,5 +1,5 @@
 # MSResident Dockerfile
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jdk-jammy
 
 VOLUME /tmp
 

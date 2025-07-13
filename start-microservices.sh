@@ -12,7 +12,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Verificar se o Docker Compose está instalado
-if ! command -v docker-compose &> /dev/null; then
+if ! docker compose version &> /dev/null; then
     echo "❌ Docker Compose não está instalado. Por favor, instale o Docker Compose primeiro."
     exit 1
 fi
@@ -28,7 +28,7 @@ fi
 
 # Limpar containers e volumes antigos
 echo "🧹 Limpando containers antigos..."
-sudo docker-compose down -v 2>/dev/null || true
+sudo docker compose down -v 2>/dev/null || true
 sudo docker system prune -f 2>/dev/null || true
 
 # Verificar se os Dockerfiles existem
@@ -52,7 +52,7 @@ echo "✅ Todos os Dockerfiles encontrados"
 
 # Construir e iniciar apenas o banco de dados primeiro
 echo "🚀 Iniciando banco de dados..."
-sudo docker-compose up -d db
+sudo docker compose up -d db
 
 # Aguardar o banco ficar pronto
 echo "⏳ Aguardando banco de dados ficar pronto..."
@@ -61,7 +61,7 @@ sleep 30
 # Verificar se o banco está saudável
 echo "🔍 Verificando saúde do banco..."
 for i in {1..30}; do
-    if sudo docker-compose exec db mysqladmin ping -h localhost -u root -proot &>/dev/null; then
+    if sudo docker compose exec db mysqladmin ping -h localhost -u root -proot &>/dev/null; then
         echo "✅ Banco de dados está funcionando!"
         break
     fi
@@ -70,16 +70,16 @@ for i in {1..30}; do
 done
 
 # Verificar se o banco realmente está funcionando
-if ! sudo docker-compose exec db mysqladmin ping -h localhost -u root -proot &>/dev/null; then
+if ! sudo docker compose exec db mysqladmin ping -h localhost -u root -proot &>/dev/null; then
     echo "❌ Erro: Banco de dados não está respondendo"
     echo "📋 Logs do banco:"
-    sudo docker-compose logs db
+    sudo docker compose logs db
     exit 1
 fi
 
 # Construir e iniciar todos os microsserviços
 echo "🏗️  Construindo e iniciando microsserviços..."
-sudo docker-compose up -d --build
+sudo docker compose up -d --build
 
 # Aguardar os serviços ficarem prontos
 echo "⏳ Aguardando microsserviços ficarem prontos..."
@@ -87,7 +87,7 @@ sleep 60
 
 # Verificar status dos serviços
 echo "📊 Status dos serviços:"
-sudo docker-compose ps
+sudo docker compose ps
 
 # Verificar se os serviços estão respondendo
 echo "🔍 Testando conectividade dos microsserviços..."
@@ -127,8 +127,8 @@ echo "   Senha: root"
 echo "   Bancos: msresident, msfinancial, msproprietary"
 echo ""
 echo "📋 Comandos úteis:"
-echo "   Ver logs: sudo docker-compose logs [serviço]"
-echo "   Parar tudo: sudo docker-compose down"
-echo "   Reconstruir: sudo docker-compose up -d --build"
+echo "   Ver logs: sudo docker compose logs [serviço]"
+echo "   Parar tudo: sudo docker compose down"
+echo "   Reconstruir: sudo docker compose up -d --build"
 echo ""
 echo "✅ Inicialização concluída!"

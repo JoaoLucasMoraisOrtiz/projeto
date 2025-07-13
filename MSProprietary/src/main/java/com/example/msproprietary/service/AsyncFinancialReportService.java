@@ -91,6 +91,7 @@ public class AsyncFinancialReportService {
     private void sendNotificationToProprietary(Proprietary proprietary) {
         // Implementar lógica de envio de notificação
         // Pode ser email, SMS, push notification, etc.
-        System.out.println("Enviando notificação para: " + proprietary.getName() + " (" + proprietary.getEmail() + ")");
+        String email = proprietary.getContact() != null ? proprietary.getContact().getEmail() : "N/A";
+        System.out.println("Enviando notificação para: " + proprietary.getName() + " (" + email + ")");
     }
 }

@@ -12,7 +12,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Verificar se o Docker Compose está instalado
-if ! command -v docker-compose &> /dev/null; then
+if ! docker compose version &> /dev/null; then
     echo "❌ Docker Compose não está instalado. Por favor, instale o Docker Compose primeiro."
     exit 1
 fi
@@ -29,7 +29,7 @@ fi
 
 # Parar containers existentes
 echo "🛑 Parando containers existentes..."
-docker-compose down
+docker compose down
 
 # Remover volumes antigos (opcional - descomente se quiser limpar dados)
 # echo "🗑️  Removendo volumes antigos..."
@@ -37,7 +37,7 @@ docker-compose down
 
 # Iniciar apenas o banco de dados primeiro
 echo "🚀 Iniciando banco de dados..."
-docker-compose up -d db
+docker compose up -d db
 
 # Aguardar o banco ficar pronto
 echo "⏳ Aguardando banco de dados ficar pronto..."
@@ -45,7 +45,7 @@ sleep 30
 
 # Verificar se o banco está respondendo
 echo "🔍 Verificando conectividade do banco..."
-docker-compose exec db mysql -u root -proot -e "SHOW DATABASES;" > /dev/null 2>&1
+docker compose exec db mysql -u root -proot -e "SHOW DATABASES;" > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✅ Banco de dados está funcionando!"
@@ -56,12 +56,12 @@ fi
 
 # Executar script de inicialização adicional se necessário
 echo "📝 Executando script de inicialização..."
-docker-compose exec db mysql -u root -proot < init-databases.sql
+docker compose exec db mysql -u root -proot < init-databases.sql
 
 echo "=== Instruções para Executar os Microsserviços ==="
 echo ""
 echo "1. Para executar todos os microsserviços via Docker:"
-echo "   docker-compose up"
+echo "   docker compose up"
 echo ""
 echo "2. Para executar individualmente (desenvolvimento):"
 echo "   cd MSResident && mvn spring-boot:run"
