@@ -60,8 +60,8 @@ class ResidentControllerTest {
 
         // When & Then
         mockMvc.perform(get("/residents/1"))
-                .andExpected(status().isOk())
-                .andExpected(jsonPath("$.name").value("João Silva"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("João Silva"));
 
         verify(residentRepository, times(1)).findById(1L);
     }
@@ -73,7 +73,7 @@ class ResidentControllerTest {
 
         // When & Then
         mockMvc.perform(get("/residents/999"))
-                .andExpected(status().isNotFound());
+                .andExpect(status().isNotFound());
 
         verify(residentRepository, times(1)).findById(999L);
     }
@@ -87,8 +87,8 @@ class ResidentControllerTest {
         mockMvc.perform(post("/residents")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(resident)))
-                .andExpected(status().isOk())
-                .andExpected(jsonPath("$.name").value("João Silva"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("João Silva"));
 
         verify(residentRepository, times(1)).save(any(Resident.class));
     }
@@ -103,8 +103,8 @@ class ResidentControllerTest {
         mockMvc.perform(put("/residents/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(resident)))
-                .andExpected(status().isOk())
-                .andExpected(jsonPath("$.name").value("João Silva"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("João Silva"));
 
         verify(residentRepository, times(1)).existsById(1L);
         verify(residentRepository, times(1)).save(any(Resident.class));
@@ -117,7 +117,7 @@ class ResidentControllerTest {
 
         // When & Then
         mockMvc.perform(delete("/residents/1"))
-                .andExpected(status().isNoContent());
+                .andExpect(status().isNoContent());
 
         verify(residentRepository, times(1)).existsById(1L);
         verify(residentRepository, times(1)).deleteById(1L);

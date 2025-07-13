@@ -23,21 +23,25 @@ public class BillingNotificationService {
     public void sendMonthlyPaymentReminders() {
         System.out.println("Iniciando envio de lembretes mensais de pagamento...");
         
-        List<Resident> residents = residentRepository.findAll();
-        
-        for (Resident resident : residents) {
-            try {
-                // Consulta faturas pendentes no MSFinancialManagement
-                String url = "http://localhost:8082/charges?residentId=" + resident.getId() + "&status=PENDING";
-                // Aqui você faria a chamada REST para buscar as faturas pendentes
-                // String pendingCharges = restTemplate.getForObject(url, String.class);
-                
-                // Enviar notificação (email, SMS, etc.)
-                sendNotificationToResident(resident);
-                
-            } catch (Exception e) {
-                System.err.println("Erro ao enviar lembrete para o residente " + resident.getId() + ": " + e.getMessage());
+        try {
+            List<Resident> residents = residentRepository.findAll();
+            
+            for (Resident resident : residents) {
+                try {
+                    // Consulta faturas pendentes no MSFinancialManagement
+                    String url = "http://localhost:8082/charges?residentId=" + resident.getId() + "&status=PENDING";
+                    // Aqui você faria a chamada REST para buscar as faturas pendentes
+                    // String pendingCharges = restTemplate.getForObject(url, String.class);
+                    
+                    // Enviar notificação (email, SMS, etc.)
+                    sendNotificationToResident(resident);
+                    
+                } catch (Exception e) {
+                    System.err.println("Erro ao enviar lembrete para o residente " + resident.getId() + ": " + e.getMessage());
+                }
             }
+        } catch (Exception e) {
+            System.err.println("Erro ao buscar residentes: " + e.getMessage());
         }
         
         System.out.println("Envio de lembretes mensais concluído.");
