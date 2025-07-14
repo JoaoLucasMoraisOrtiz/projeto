@@ -1,8 +1,10 @@
 package com.example.msresident.model;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Resident extends Person {
     
     @Enumerated(EnumType.STRING)
@@ -10,6 +12,7 @@ public class Resident extends Person {
 
     @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JoinColumn(name = "unit_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Unit unit;
 
     // Getters and Setters
